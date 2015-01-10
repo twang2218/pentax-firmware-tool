@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset=utf-8>
+    <title>Pentax Firmware Decrypter</title>
+    <style type="text/css">
+        #holder {
+            border: 10px dashed #ccc;
+            border-radius: 30px;
+            margin: 20px auto;
+            width: 80%;
+            height: 80%;
+
+            /* Internet Explorer */
+            fuck-ie: true;
+
+            /* Firefox */
+            display:-moz-box;
+            -moz-box-pack:center;
+            -moz-box-align:center;
+
+            /* Safari, Opera, and Chrome */
+            display:-webkit-box;
+            -webkit-box-pack:center;
+            -webkit-box-align:center;
+
+            /* W3C */
+            display:box;
+            box-pack:center;
+            box-align:center;
+
+        }
+
+        #holder.hover {
+            border: 10px dashed #333;
+        }
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: sans-serif;
+        }
+
+        #footer {
+            width: 80%;
+            border: 2px solid #555;
+            margin: 10px auto;
+        }
+
+        #apistatus {
+            margin: auto 0;
+            text-align: center;
+            padding: 3px 0;
+        }
+        #apistatus.success {
+            background-color: #c0dac1;
+        }
+
+        #apistatus.fail {
+            background-color: #ffa69a;
+        }
+
+    </style>
+</head>
+
+<body>
+    <div id="holder">
+        <h1>Drag and drop your file here</h1>
+    </div>
+    <div id="apistatus">File API & FileReader API not supported. Please download a modern browser.</div>
+    <div id="footer">
+    <a href="http://github.com">Fork</a>
+    </div>
+    <script src="FileSaver.min.js"></script>
+    <script src="pfdecrypt.js"></script>
+</body>
+
+</html>
