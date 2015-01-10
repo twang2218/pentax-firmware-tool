@@ -5,6 +5,11 @@ var holder = document.getElementById('holder'),
     filename = 'decrypt.bin',
     littleEndian = false;
 
+if (navigator.userAgent.toLowerCase().indexOf('chrome') > -1)
+    document.getElementById("browser-warning").style.display = 'none';
+
+
+
 if (typeof window.FileReader === 'undefined') {
     state.className = 'fail';
 } else {
@@ -35,6 +40,10 @@ holder.ondrop = function(e) {
 };
 
 function decrypt() {
+
+    dataview = new DataView(buffer);
+    var in_size = buffer.byteLength;
+
     if (getStringFromAB(buffer, 0x24, 9) == "Copyright")
     {
         littleEndian = false;
@@ -56,19 +65,11 @@ function decrypt() {
         deobfuscate(0x1000000, 0, 0x80, in_size - 0x1000000 - 0x80);
     }
     else
-    {           state.className = 'fail';
+    {
+        state.className = 'fail';
         state.innerHTML = 'Unknown input file.';
         return;
     }
-
-
-    dataview = new DataView(buffer);
-
-
-
-    deobfuscate(0, 0xf00, 0, 0xf00);
-    deobfuscate(0, 0xf00, 0x1000, 0xc00000 - 0x1000);
-    deobfuscate(0xc00000, 0x3ff80, 0, 0x3ff80);
 
     var blob = new Blob([dataview]);
     saveAs(blob, filename, "application/octet-stream");
