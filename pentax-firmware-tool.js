@@ -1,9 +1,12 @@
 #!/usr/bin/env node
 
+'use strict';
+
 // dependencies
 const program = require('commander');
 const toArray = require('stream-to-array');
 const fs = require('fs');
+const decipher = require('./');
 //  config
 const config = require('./package.json');
 
@@ -52,8 +55,11 @@ function save(filename, data) {
 }
 
 function decode(data) {
-    console.log(data.length + ' bytes');
-    console.log(data);
+    console.log('Encrpyted file size: ' + data.length + ' bytes');
 
-    save(program.output, data);
+    let out = decipher.decode(data);
+
+    console.log('Decrypted file size: ' + out.length + ' bytes');
+
+    save(program.output, out);
 }

@@ -1,182 +1,209 @@
-var holder = document.getElementById('holder'),
-    state = document.getElementById('apistatus'),
-    buffer = null,
-    dataview = null,
-    filename = 'decrypt.bin',
-    littleEndian = false;
+'use strict';
 
-if (navigator.userAgent.toLowerCase().indexOf('chrome') > -1)
-    document.getElementById("browser-warning").style.display = 'none';
+//  Constants
+const COPYRIGHT = 'Copyright';
 
+const SECTION_0x00080000 = 0x00080000;
+const SECTION_0x00A00000 = 0x00A00000;
+const SECTION_0x00C00000 = 0x00C00000;
+const SECTION_0x00C40000 = 0x00C40000;
+const SECTION_0x01000000 = 0x01000000;
+const SECTION_0x02000000 = 0x02000000;
 
+const OFFSET_BASE_0 = 0;
 
-if (typeof window.FileReader === 'undefined') {
-    state.className = 'fail';
-} else {
-    state.className = 'success';
-    state.innerHTML = 'File API & FileReader available';
-}
+const OFFSET_IV_0 = 0;
+const OFFSET_IV_100 = 0x100
+const OFFSET_IV_F00 = 0xF00;
+const OFFSET_IV_3FF80 = 0x3FF80;
 
-holder.ondragover = function() {
-    this.className = 'hover';
-    return false;
-};
-holder.ondragend = function() {
-    this.className = '';
-    return false;
-};
-holder.ondrop = function(e) {
-    this.className = '';
-    e.preventDefault();
+const OFFSET_START_0 = 0;
+const OFFSET_START_80 = 0x80;
+const OFFSET_START_100 = 0x100;
+const OFFSET_START_200 = 0x200;
+const OFFSET_START_1000 = 0x1000;
 
-    var file = e.dataTransfer.files[0],
-        fReader = new FileReader();
-    filename = "decrypted-" + file.name;
-    fReader.readAsArrayBuffer(file);
-    fReader.onload = function(evt) {
-        buffer = evt.target.result;
-        decrypt();
-    };
-};
+const OFFSET_COPYRIGHT = 0x24;
+const OFFSET_COPYRIGHT_1 = OFFSET_IV_0 + OFFSET_COPYRIGHT;
+const OFFSET_COPYRIGHT_2 = OFFSET_IV_100 + OFFSET_COPYRIGHT;
+const OFFSET_COPYRIGHT_3 = OFFSET_IV_F00 + OFFSET_COPYRIGHT;
 
-function decrypt() {
+const KEY_SIZE = 0x20;
+const BLOCK_SIZE = 0x80;
 
-    dataview = new DataView(buffer);
-    var in_size = buffer.byteLength;
-
-    if (getStringFromAB(buffer, 0x24, 9) == "Copyright")
-    {
-        littleEndian = false;
-        deobfuscate(0, 0, 0x100, 0x0a00000 - 0x100);
-        deobfuscate(0x0a00000, 0, 0x100, 0x80000 - 0x100);
-    }
-    else if (getStringFromAB(buffer, 0xf24, 9) == "Copyright")
-    {
-        littleEndian = false;
-        deobfuscate(0, 0xf00, 0, 0xf00);
-        deobfuscate(0, 0xf00, 0x1000, 0xc00000 - 0x1000);
-        deobfuscate(0xc00000, 0x3ff80, 0, 0x3ff80);
-    }
-    else if (getStringFromAB(buffer, 0x124, 9) == "Copyright")
-    {
-        littleEndian = true;
-        deobfuscate(0, 0x100, 0, 0x100);
-        deobfuscate(0, 0x100, 0x200, 0x1000000 - 0x200);
-        deobfuscate(0x1000000, 0, 0x80, in_size - 0x1000000 - 0x80);
-    }
-    else
-    {
-        state.className = 'fail';
-        state.innerHTML = 'Unknown input file.';
-        return;
+class Decipher {
+    constructor() {
+        this._buffer = null;
+        this._isLittleEndian = false;
     }
 
-    var blob = new Blob([dataview]);
-    saveAs(blob, filename, "application/octet-stream");
-
-}
-
-function getStringFromAB(buffer, start, length)
-{
-    return String.fromCharCode.apply(null, new Uint8Array(buffer, start, length));
-}
-
-function deobfuscate(off_base, off_iv, off_start, length)
-{
-    var iv = load_iv(off_base + off_iv);
-    var key = calculate_key(iv);
-    if (mangle_blocks(off_start, length, off_base, key) != 0) {
-        state.className = 'fail';
-        state.innerHTML = 'Function mangle_blocks failed.';
+    readUInt8(offset) {
+        return this._buffer.readUInt8(offset);
     }
 
-}
-
-function mangle_blocks(offset, length, base, fullkey)
-{
-    var blocks;
-
-    if (offset % 0x80)
-        return -1;
-
-    if (length % 0x80)
-        return -1;
-
-    blocks = length / 0x80;
-
-    while (blocks--) {
-        for (var i = 0; i < 0x20; ++i)
-            xor32(base + offset + 4*i, fullkey[i] - offset);
-        offset += 0x80;
-    }
-    return 0;
-
-}
-
-function xor32(offset, val) {
-    write32(offset, read32(offset) ^ val);
-}
-
-function write32(offset, val) {
-    if (littleEndian)
-    {
-        dataview.setUint8(offset + 3, val >> 24);
-        dataview.setUint8(offset + 2, val >> 16);
-        dataview.setUint8(offset + 1, val >> 8);
-        dataview.setUint8(offset + 0, val);
-    }
-    else {
-        dataview.setUint8(offset + 0, val >> 24);
-        dataview.setUint8(offset + 1, val >> 16);
-        dataview.setUint8(offset + 2, val >> 8);
-        dataview.setUint8(offset + 3, val);
-    }
-}
-
-function load_iv(offset)
-{
-    var iv = new Uint32Array(4);
-    iv[0] = read32(offset);
-    iv[1] = read32(offset + 4);
-    iv[2] = read32(offset + 8);
-    iv[3] = read32(offset + 12);
-    return iv;
-}
-
-function read32(offset) {
-    var data = new Uint8Array(buffer, offset, 4);
-    var result = 0;
-
-    if (littleEndian) {
-        result |= data[3] << 24;
-        result |= data[2] << 16;
-        result |= data[1] << 8;
-        result |= data[0];
-    }
-    else {
-        result |= data[0] << 24;
-        result |= data[1] << 16;
-        result |= data[2] << 8;
-        result |= data[3];
+    readUInt32(offset) {
+        return this._isLittleEndian ? this._buffer.readUInt32LE(offset) :
+            this._buffer.readUInt32BE(offset);
     }
 
-    return result;
-}
-
-function calculate_key(iv)
-{
-    var key = new Uint32Array(32);
-    var tmp = new Uint32Array(4);
-    tmp[0] = iv[0] + ~iv[2];
-    tmp[1] = iv[1] + ~iv[3];
-    tmp[2] = ~tmp[0];
-    tmp[3] = ~tmp[1];
-    for (var i=0; i < 4; ++i) {
-        for (var j=0; j<4; ++j) {
-            key[i + 8*j + 0] = tmp[i] + iv[j] - 1;
-            key[i + 8*j + 4] = tmp[i] - iv[j] - 1;
+    writeUInt32(val, offset) {
+        //  make sure the val is unsigned
+        val = val >>> 0;
+        if (this._isLittleEndian) {
+            this._buffer.writeUInt32LE(val, offset);
+        } else {
+            this._buffer.writeUInt32BE(val, offset);
         }
     }
 
-    return key;
+    xor32(offset, val) {
+        this.writeUInt32(this.readUInt32(offset) ^ val, offset);
+    }
+
+    strcmp(offset, text) {
+        let strbuf = new Uint8Array(new Buffer(text));
+
+        if (offset + strbuf.length > this._buffer.length) {
+            return false;
+        }
+
+        let isEqual = true;
+        strbuf.map((b, i) => {
+            if (this.readUInt8(offset + i) !== b) {
+                isEqual = false;
+            }
+        });
+        return isEqual;
+    }
+
+    loadIv(offset) {
+        return [
+            this.readUInt32(offset),
+            this.readUInt32(offset + 4),
+            this.readUInt32(offset + 8),
+            this.readUInt32(offset + 12)
+        ];
+    }
+
+    calculateKey(iv) {
+        let tmp = new Uint32Array(4);
+
+        tmp[0] = iv[0] + ~iv[2];
+        tmp[1] = iv[1] + ~iv[3];
+        tmp[2] = ~tmp[0];
+        tmp[3] = ~tmp[1];
+
+        let key = new Uint32Array(KEY_SIZE);
+        for (let i = 0; i < 4; ++i) {
+            for (let j = 0; j < 4; ++j) {
+                key[i + 8 * j + 0] = tmp[i] + iv[j] - 1;
+                key[i + 8 * j + 4] = tmp[i] - iv[j] - 1;
+            }
+        }
+
+        return key;
+    }
+
+    mangleBlocks(offset, length, base, key) {
+        //  Make sure the offset/length is BLOCK_SIZE aligned.
+        if (offset % BLOCK_SIZE || length % BLOCK_SIZE) {
+            throw new Error(
+                'Arguments {offset: ' + offset.toString(16) +
+                ', length: ' + length.toString(16) +
+                '} should be aligned to BLOCK_SIZE(' + BLOCK_SIZE.toString(
+                    16) + ') ');
+        }
+
+        //  process
+        for (let b = 0; b < length / BLOCK_SIZE; ++b) {
+            for (let i = 0; i < KEY_SIZE; ++i) {
+                this.xor32(
+                    base + (b * BLOCK_SIZE + offset) + 4 * i,
+                    key[i] - (b * BLOCK_SIZE + offset)
+                );
+            }
+        }
+    }
+
+    deobfuscate(offsetBase, offsetIV, offsetStart, length) {
+        let iv = this.loadIv(offsetBase + offsetIV);
+        let key = this.calculateKey(iv);
+        this.mangleBlocks(offsetStart, length, offsetBase, key);
+    }
+
+    decode(input) {
+        this._buffer = input;
+
+        let inSize = this._buffer.length;
+
+        if (this.strcmp(OFFSET_COPYRIGHT_1, COPYRIGHT)) {
+            this._isLittleEndian = false;
+
+            this.deobfuscate(
+                OFFSET_BASE_0,
+                OFFSET_IV_0,
+                OFFSET_START_100,
+                SECTION_0x00A00000 - OFFSET_START_100);
+            this.deobfuscate(
+                SECTION_0x00A00000,
+                OFFSET_IV_0,
+                OFFSET_START_100,
+                SECTION_0x00080000 - OFFSET_START_100);
+        } else if (this.strcmp(OFFSET_COPYRIGHT_3, COPYRIGHT)) {
+            this._isLittleEndian = false;
+
+            this.deobfuscate(
+                OFFSET_BASE_0,
+                OFFSET_IV_F00,
+                OFFSET_START_0,
+                OFFSET_IV_F00);
+            this.deobfuscate(
+                OFFSET_BASE_0,
+                OFFSET_IV_F00,
+                OFFSET_START_1000,
+                SECTION_0x00C00000 - OFFSET_START_1000);
+
+            if (inSize >= SECTION_0x00C00000 + OFFSET_IV_3FF80) {
+                this.deobfuscate(
+                    SECTION_0x00C00000,
+                    OFFSET_IV_3FF80,
+                    OFFSET_START_0,
+                    OFFSET_IV_3FF80);
+            }
+        } else if (this.strcmp(OFFSET_COPYRIGHT_2, COPYRIGHT)) {
+            this._isLittleEndian = true;
+
+            this.deobfuscate(
+                OFFSET_BASE_0,
+                OFFSET_IV_100,
+                OFFSET_START_0,
+                OFFSET_IV_100);
+
+            let partSize = 0;
+            if ((inSize > SECTION_0x02000000 + 20) &&
+                this.strcmp(SECTION_0x02000000 + 10, COPYRIGHT)) {
+                partSize = SECTION_0x02000000;
+            } else {
+                partSize = SECTION_0x01000000;
+            }
+
+            this.deobfuscate(
+                OFFSET_BASE_0,
+                OFFSET_IV_100,
+                OFFSET_START_200,
+                partSize - OFFSET_START_200);
+
+            this.deobfuscate(
+                partSize,
+                OFFSET_IV_0,
+                OFFSET_START_80,
+                inSize - partSize - OFFSET_START_80);
+        } else {
+            throw new Error('Unknown firmware format.');
+        }
+
+        return this._buffer;
+    }
 }
+
+module.exports = new Decipher();

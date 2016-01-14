@@ -26,7 +26,6 @@
     "homepage": "https://github.com/twang2218/pentax-firmware-tool#readme",
     "dependencies": {
         "commander": "^2.9.0",
-        "native-or-bluebird": "^1.2.0",
         "stream-to-array": "^2.2.0"
     }
 }
