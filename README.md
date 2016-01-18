@@ -3,7 +3,7 @@
 Pentax Firmware Decode Tool
 ===============================
 
-This is a Pentax Firmware Decryption/Decompression tool, which is based on [MooseV2's code](https://github.com/MooseV2/pfwtool_html), which is a Javascript implementation based on [svenpeter42's code](https://github.com/svenpeter42/pfwtool). Also, I included [the decompress's patch made by bootcoder](http://www.pentaxforums.com/forums/6-pentax-dslr-discussion/250555-resurrecting-pentax-firmware-hacking-36.html#post3395067)[TODO].
+This is a Pentax Firmware Decryption/Decompression tool, which is based on [MooseV2's code](https://github.com/MooseV2/pfwtool_html), which is a Javascript implementation based on [svenpeter42's code](https://github.com/svenpeter42/pfwtool). Also, I included [the decompress's patch made by bootcoder](http://www.pentaxforums.com/forums/6-pentax-dslr-discussion/250555-resurrecting-pentax-firmware-hacking-36.html#post3395067).
 
 Made for the [PHDK project](http://www.pentaxforums.com/forums/6-pentax-dslr-discussion/250555-resurrecting-pentax-firmware-hacking.html).
 

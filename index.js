@@ -1,8 +1,8 @@
 'use strict';
 
 //  Constants
-const COPYRIGHT = 'Copyright';
 
+//      Deobfuscate
 const SECTION_0x00080000 = 0x00080000;
 const SECTION_0x00A00000 = 0x00A00000;
 const SECTION_0x00C00000 = 0x00C00000;
@@ -23,13 +23,41 @@ const OFFSET_START_100 = 0x100;
 const OFFSET_START_200 = 0x200;
 const OFFSET_START_1000 = 0x1000;
 
+const COPYRIGHT = 'Copyright';
+
 const OFFSET_COPYRIGHT = 0x24;
-const OFFSET_COPYRIGHT_1 = OFFSET_IV_0 + OFFSET_COPYRIGHT;
-const OFFSET_COPYRIGHT_2 = OFFSET_IV_100 + OFFSET_COPYRIGHT;
-const OFFSET_COPYRIGHT_3 = OFFSET_IV_F00 + OFFSET_COPYRIGHT;
+const OFFSET_COPYRIGHT_024 = OFFSET_IV_0 + OFFSET_COPYRIGHT;
+const OFFSET_COPYRIGHT_124 = OFFSET_IV_100 + OFFSET_COPYRIGHT;
+const OFFSET_COPYRIGHT_F24 = OFFSET_IV_F00 + OFFSET_COPYRIGHT;
 
 const KEY_SIZE = 0x20;
 const BLOCK_SIZE = 0x80;
+
+//      Decompress
+const PENTAX_KS = 'PENTAX K-S';
+const OFFSET_PENTAX_KS = 0;
+const OFFSET_MODEL = PENTAX_KS.length;
+
+const OFFSET_COMPRESSED_SIGN = 0x1F6;
+
+const MAX_FIRMWARE_SIZE = 0x02000000;
+const CAMERA_K_S1 = 1;
+const CAMERA_K_S2 = 2;
+
+const BLOCK_LENGTH_CAMERA_DEPS = 0xE000;
+const BLOCK_LENGTH_K_S1 = 0xC002;
+const BLOCK_LENGTH_K_S2 = 0x6000;
+const BLOCK_LENGTH_MAX = 0x8000;
+
+const COPY_MASK_INITIAL = 0x8000;
+const NBBY = 8;
+const LENGTH_BITS = 3;
+const OFFSET_BITS = NBBY - LENGTH_BITS;
+const LENGTH_MIN = 3;
+const OFFSET_MASK = (0xFF << LENGTH_BITS) & 0xFF;
+const LENGTH_MASK = (~OFFSET_MASK) & 0xFF;
+const LENGTH_EXTENDED = 10;
+const BLOCK_START = 0x200;
 
 class Decipher {
     constructor() {
@@ -37,9 +65,7 @@ class Decipher {
         this._isLittleEndian = false;
     }
 
-    readUInt8(offset) {
-        return this._buffer.readUInt8(offset);
-    }
+    //  Common Tools
 
     readUInt32(offset) {
         return this._isLittleEndian ? this._buffer.readUInt32LE(offset) :
@@ -61,20 +87,24 @@ class Decipher {
     }
 
     strcmp(offset, text) {
+        //  convert the string to byte array
         let strbuf = new Uint8Array(new Buffer(text));
 
+        //  whether there is enough data to compare
         if (offset + strbuf.length > this._buffer.length) {
             return false;
         }
 
-        let isEqual = true;
-        strbuf.map((b, i) => {
-            if (this.readUInt8(offset + i) !== b) {
-                isEqual = false;
+        //  compare the byte one by one
+        for (let i = 0; i < strbuf.length; ++i) {
+            if (this._buffer.readUInt8(offset + i) != strbuf[i]) {
+                return false;
             }
-        });
-        return isEqual;
+        }
+        return true;
     }
+
+    //  Deobfuscate Functions
 
     loadIv(offset) {
         return [
@@ -108,10 +138,10 @@ class Decipher {
         //  Make sure the offset/length is BLOCK_SIZE aligned.
         if (offset % BLOCK_SIZE || length % BLOCK_SIZE) {
             throw new Error(
-                'Arguments {offset: ' + offset.toString(16) +
-                ', length: ' + length.toString(16) +
-                '} should be aligned to BLOCK_SIZE(' + BLOCK_SIZE.toString(
-                    16) + ') ');
+                'Arguments {offset: 0x' + offset.toString(16) +
+                ', length: 0x' + length.toString(16) +
+                '} should be aligned to BLOCK_SIZE(0x' +
+                BLOCK_SIZE.toString(16) + ') ');
         }
 
         //  process
@@ -131,12 +161,174 @@ class Decipher {
         this.mangleBlocks(offsetStart, length, offsetBase, key);
     }
 
+    //  Decompress Functions
+
+    //  Validate the K-S1/K-S2 firmware
+    validateKS() {
+        //  check 4-byte alignment
+        if (this._buffer.length & 0x3) {
+            throw new Error('Wrong firmware size.');
+        }
+
+        //  validate SYSV checksum
+        let checksum = 0,
+            offset = 0;
+        while (offset < this._buffer.length) {
+            checksum += this._buffer.readUInt32LE(offset);
+            offset += 4;
+        }
+        checksum &= 0xFFFFFFFF;
+        if (checksum != 0) {
+            throw new Error('Firmware checksum failed. (' +
+                checksum.toString(16) + ')');
+        }
+
+        //  check compressed signiture
+        if (this._buffer.readUInt16BE(OFFSET_COMPRESSED_SIGN) == 0) {
+            throw new Error('Firmware compression check failed.');
+        }
+    }
+
+    getBlockLength(offset, model) {
+        let blockLength = this._buffer.readUInt16BE(offset);
+
+        if (blockLength === 0) {
+            //  End of Stream
+            return blockLength;
+        }
+
+        if (blockLength === BLOCK_LENGTH_CAMERA_DEPS) {
+            //  camera model dependent case
+            if (model === CAMERA_K_S1) {
+                blockLength = BLOCK_LENGTH_K_S1;
+            } else {
+                blockLength = BLOCK_LENGTH_K_S2;
+            }
+        } else if (blockLength > BLOCK_LENGTH_MAX) {
+            throw new Error('Incorrect Block Size.');
+        }
+
+        let blockEnd = offset + blockLength + 2 + 2 + 2;
+        if (blockEnd > this._buffer.length) {
+            throw new Error('The input block is not completed.');
+        }
+
+        return blockLength;
+    }
+
+    copy(dest, pDestStart, src, pSrcStart, length) {
+        if (dest.start + length > dest.length) {
+            throw new Error(
+                'Dest buffer is not large enough for copying.');
+        }
+
+        for (let i = 0; i < length; ++i) {
+            dest[pDestStart + i] = src[pSrcStart + i];
+        }
+    }
+
+    decompressBlock(dest, pDestStart, src, pSrcStart, blockLength) {
+        let pSrc = pSrcStart;
+        let pDest = pDestStart;
+
+        let copymask = 0,
+            copymap = 0;
+
+        while (pSrc < pSrcStart + blockLength - 2) {
+            if (copymask === 0) {
+                copymap = src.readUInt16BE(pSrc);
+                pSrc += 2;
+                copymask = COPY_MASK_INITIAL;
+
+            } else {
+
+                if ((copymap & copymask) != 0) {
+                    //  This is a COPY
+                    let s0 = src[pSrc],
+                        s1 = src[pSrc + 1];
+                    pSrc += 2;
+
+                    let length = (s0 & LENGTH_MASK) + LENGTH_MIN;
+                    //  extended the length field
+                    if (length === LENGTH_EXTENDED) {
+                        do {
+                            length += src[pSrc];
+                        } while (src[pSrc++] === 0xFF);
+                    }
+
+                    let offset = ((s0 & OFFSET_MASK) << OFFSET_BITS) | s1;
+                    if (offset === 0) {
+                        throw new Error('The offset is Zero.');
+                    }
+
+                    this.copy(dest, pDest, dest, pDest - offset, length);
+                    pDest += length;
+                } else {
+                    //  This is a LITERAL
+                    dest[pDest++] = src[pSrc++];
+                }
+                //  shift mask to next
+                copymask >>>= 1;
+            }
+        }
+
+        //  Trailer
+        if (src.readUInt16BE(pSrc) != 0) {
+            throw new Error('Missing block end.\n');
+        }
+
+        return pDest;
+    }
+
+    decompress(offset, model) {
+        let out = new Buffer(MAX_FIRMWARE_SIZE);
+        let pOut = 0;
+        let pIn = offset;
+
+        while (true) {
+            if (pOut > out.length) {
+                throw new Error('Not enough output buffer.');
+            }
+
+            let blockLength = this.getBlockLength(pIn, model);
+            pIn += 2;
+
+            if (blockLength == 0) {
+                //  EOF
+                break;
+            } else if (model === CAMERA_K_S1 &&
+                blockLength === BLOCK_LENGTH_K_S1) {
+                //  for some reason the last 2 bytes ignored
+                this.copy(out, pOut,
+                    this._buffer, pIn, blockLength - 2);
+                pIn += blockLength;
+                pOut += blockLength - 2;
+            } else if (model === CAMERA_K_S2 &&
+                blockLength === BLOCK_LENGTH_K_S2) {
+                this.copy(out, pOut,
+                    this._buffer, pIn, blockLength);
+                pOut += blockLength;
+                pIn += blockLength;
+            } else {
+                //  decompress the block
+                pOut = this.decompressBlock(out, pOut,
+                    this._buffer, pIn, blockLength
+                );
+                pIn += blockLength;
+            }
+        }
+
+        return out.slice(0, pOut);
+    }
+
+    //  Entrance
+
     decode(input) {
         this._buffer = input;
 
         let inSize = this._buffer.length;
 
-        if (this.strcmp(OFFSET_COPYRIGHT_1, COPYRIGHT)) {
+        if (this.strcmp(OFFSET_COPYRIGHT_024, COPYRIGHT)) {
             this._isLittleEndian = false;
 
             this.deobfuscate(
@@ -149,7 +341,7 @@ class Decipher {
                 OFFSET_IV_0,
                 OFFSET_START_100,
                 SECTION_0x00080000 - OFFSET_START_100);
-        } else if (this.strcmp(OFFSET_COPYRIGHT_3, COPYRIGHT)) {
+        } else if (this.strcmp(OFFSET_COPYRIGHT_F24, COPYRIGHT)) {
             this._isLittleEndian = false;
 
             this.deobfuscate(
@@ -170,7 +362,7 @@ class Decipher {
                     OFFSET_START_0,
                     OFFSET_IV_3FF80);
             }
-        } else if (this.strcmp(OFFSET_COPYRIGHT_2, COPYRIGHT)) {
+        } else if (this.strcmp(OFFSET_COPYRIGHT_124, COPYRIGHT)) {
             this._isLittleEndian = true;
 
             this.deobfuscate(
@@ -198,6 +390,12 @@ class Decipher {
                 OFFSET_IV_0,
                 OFFSET_START_80,
                 inSize - partSize - OFFSET_START_80);
+        } else if (this.strcmp(OFFSET_PENTAX_KS, PENTAX_KS)) {
+            let model = this._buffer.readUInt8(OFFSET_MODEL) -
+                '0'.charCodeAt(0);
+            console.log('Found firmware of ' + PENTAX_KS + model);
+            this.validateKS();
+            return this.decompress(BLOCK_START, model);
         } else {
             throw new Error('Unknown firmware format.');
         }
