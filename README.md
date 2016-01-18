@@ -12,10 +12,10 @@ Install
 
 First you need to make sure you have installed Node.js, in case you haven't, [here is how](https://nodejs.org/en/download/package-manager/).
 
-Installing `pftool` is very simple, just:
+Installing `pfwtool` is very simple, just:
 
 ```bash
-npm i pftool -g
+npm i pfwtool -g
 ```
 
 Usage
@@ -24,7 +24,7 @@ Usage
 To use this tool is straight forward:
 
 ```
-pftool -i <in> -o <out>
+pfwtool -i <in> -o <out>
 ```
 
  * `<in>` is the filename/path of the firmware from downloaded package, such as `fwdc220b.bin`, which is encrypted/compressed.
