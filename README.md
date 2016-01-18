@@ -1,4 +1,15 @@
-[![MIT license](http://img.shields.io/badge/license-GPL--2.0-brightgreen.svg)](http://opensource.org/licenses/GPL-2.0)
+[![NPM version][npm-image]][npm-url]
+[![GPL-2 license][license-image]]([license-url])
+[![Dependency Status][dependency-image]][dependency-url]
+
+[npm-image]: http://img.shields.io/npm/v/pfwtool.svg?style=flat
+[npm-url]: https://npmjs.org/package/pfwtool
+
+[license-image]: http://img.shields.io/badge/license-GPL--2.0-brightgreen.svg
+[license-url]: http://opensource.org/licenses/GPL-2.0
+
+[dependency-image]: http://img.shields.io/gemnasium/twang2218/pentax-firmware-tool.svg
+[dependency-url]: https://gemnasium.com/twang2218/pentax-firmware-tool
 
 Pentax Firmware Decode Tool
 ===============================
@@ -23,7 +34,7 @@ Usage
 
 To use this tool is straight forward:
 
-```
+```bash
 pfwtool -i <in> -o <out>
 ```
 
@@ -33,7 +44,7 @@ pfwtool -i <in> -o <out>
 
 For other arguments, please check the `--help` arguments
 
-```
+```bash
 $ pfwtool -h
 
 Usage: pfwtool [options]
