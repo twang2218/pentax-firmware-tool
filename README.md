@@ -30,3 +30,21 @@ pfwtool -i <in> -o <out>
  * `<in>` is the filename/path of the firmware from downloaded package, such as `fwdc220b.bin`, which is encrypted/compressed.
 
  * `<out>` is the output file name of the decrypted/decompressed firmware.
+
+For other arguments, please check the `--help` arguments
+
+```
+$ pfwtool -h
+
+Usage: pfwtool [options]
+
+A command line tool to decrypt/decompress Pentax firmware
+
+Options:
+
+  -h, --help               output usage information
+  -V, --version            output the version number
+  -i, --input <filename>   Encrypted firmware filename (e.g. "fwdc226b.bin"). If no input filename is specified, the standard input will be used.
+  -o, --output <filename>  Output decrypted filename. If no output file name is specified, the standard output will be used.
+  -d, --debug [logfile]    Enable debug, log to file if the log filename is given, otherwise it will log to the console.
+```
