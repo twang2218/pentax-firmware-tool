@@ -1,9 +1,9 @@
 {
-    "name": "pentax-firmware-tool",
+    "name": "pfwtool",
     "version": "0.1.0",
     "description": "Pentax Firmware Decode Tool",
     "main": "index.js",
-    "bin": "pentax-firmware-tool.js",
+    "bin": "pfwtool.js",
     "scripts": {
         "test": "echo \"Error: no test specified\" && exit 1"
     },
@@ -16,7 +16,9 @@
         "firmware",
         "decrypt",
         "decompress",
-        "phdk"
+        "phdk",
+        "pfwtool",
+        "ptxfwtool"
     ],
     "author": "Tao Wang <twang2218@gmail.com>",
     "license": "GPL-2.0",
