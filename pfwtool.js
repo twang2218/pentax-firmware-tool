@@ -6,6 +6,8 @@
 const program = require('commander');
 const toArray = require('stream-to-array');
 const fs = require('fs');
+const tracer = require('tracer');
+
 const decipher = require('./');
 //  config
 const config = require('./package.json');
@@ -20,19 +22,61 @@ program
     .option('-o, --output <filename>',
         'Output decrypted filename. If no output file name is specified, the standard output will be used.'
     )
+    .option('-d, --debug [logfile]',
+        'Enable debug, log to file if the log filename is given, otherwise it will log to the console.'
+    )
     .parse(process.argv);
 
-//  Prepare I/O
-// var in , out;
-console.log(' input: ' + program.input);
-console.log(' output: ' + program.output);
+//  Setup the log
+const logger = getLogger();
+decipher.setLogger(logger);
 
-load(program.input);
+main();
 
-function load(filename) {
-    if (typeof filename !== 'undefined') {
+function getLogger() {
+    let logger = null;
+    if (typeof program.debug !== 'undefined') {
+        const DATE_FORMAT = 'HH:MM:ss.L'
+        if (program.debug === true) {
+
+            //  no log file specified.
+            if (typeof program.output !== 'undefined') {
+                //  we can use stdout, as the decrypted firmware will be stored on file.
+                logger = tracer.colorConsole({
+                    dateformat: DATE_FORMAT
+                });
+            } else {
+                //  we cannot use stdout, so use stderr instead.
+                logger = tracer.colorConsole({
+                    transport: function (data) {
+                        console.error(data.output);
+                    },
+                    dateformat: DATE_FORMAT
+                });
+            }
+        } else {
+            //  log to file
+            logger = tracer.console({
+                transport: function (data) {
+                    fs.appendFile(program.debug, data.output + '\n',
+                        err => {
+                            if (err) throw err;
+                        });
+                },
+                dateformat: DATE_FORMAT
+            });
+        }
+    }
+
+    return logger;
+}
+
+function main() {
+
+    //  load
+    if (typeof program.input !== 'undefined') {
         //  read file
-        fs.readFile(filename, function (err, data) {
+        fs.readFile(program.input, function (err, data) {
             if (err) throw err;
             decode(data);
         });
@@ -55,11 +99,13 @@ function save(filename, data) {
 }
 
 function decode(data) {
-    console.log('Encrpyted file size: ' + data.length + ' bytes');
+    if (logger !== null)
+        logger.info('Encrpyted file size: ' + data.length + ' bytes');
 
     let out = decipher.decode(data);
 
-    console.log('Decrypted file size: ' + out.length + ' bytes');
+    if (logger !== null)
+        logger.info('Decrypted file size: ' + out.length + ' bytes');
 
     save(program.output, out);
 }

@@ -1,5 +1,7 @@
 'use strict';
 
+var logger = null;
+
 //  Constants
 
 //      Deobfuscate
@@ -104,6 +106,14 @@ class Decipher {
         return true;
     }
 
+    error(message) {
+        if (logger != null) {
+            logger.error(message);
+        };
+
+        throw new Error(message);
+    }
+
     //  Deobfuscate Functions
 
     loadIv(offset) {
@@ -137,8 +147,7 @@ class Decipher {
     mangleBlocks(offset, length, base, key) {
         //  Make sure the offset/length is BLOCK_SIZE aligned.
         if (offset % BLOCK_SIZE || length % BLOCK_SIZE) {
-            throw new Error(
-                'Arguments {offset: 0x' + offset.toString(16) +
+            error('Arguments {offset: 0x' + offset.toString(16) +
                 ', length: 0x' + length.toString(16) +
                 '} should be aligned to BLOCK_SIZE(0x' +
                 BLOCK_SIZE.toString(16) + ') ');
@@ -167,7 +176,7 @@ class Decipher {
     validateKS() {
         //  check 4-byte alignment
         if (this._buffer.length & 0x3) {
-            throw new Error('Wrong firmware size.');
+            error('Wrong firmware size.');
         }
 
         //  validate SYSV checksum
@@ -179,13 +188,13 @@ class Decipher {
         }
         checksum &= 0xFFFFFFFF;
         if (checksum != 0) {
-            throw new Error('Firmware checksum failed. (' +
-                checksum.toString(16) + ')');
+            error('Firmware checksum failed. (' + checksum.toString(16) +
+                ')');
         }
 
         //  check compressed signiture
         if (this._buffer.readUInt16BE(OFFSET_COMPRESSED_SIGN) == 0) {
-            throw new Error('Firmware compression check failed.');
+            error('Firmware compression check failed.');
         }
     }
 
@@ -205,12 +214,12 @@ class Decipher {
                 blockLength = BLOCK_LENGTH_K_S2;
             }
         } else if (blockLength > BLOCK_LENGTH_MAX) {
-            throw new Error('Incorrect Block Size.');
+            error('Incorrect Block Size.');
         }
 
         let blockEnd = offset + blockLength + 2 + 2 + 2;
         if (blockEnd > this._buffer.length) {
-            throw new Error('The input block is not completed.');
+            error('The input block is not completed.');
         }
 
         return blockLength;
@@ -218,8 +227,7 @@ class Decipher {
 
     copy(dest, pDestStart, src, pSrcStart, length) {
         if (dest.start + length > dest.length) {
-            throw new Error(
-                'Dest buffer is not large enough for copying.');
+            error('Dest buffer is not large enough for copying.');
         }
 
         for (let i = 0; i < length; ++i) {
@@ -240,6 +248,8 @@ class Decipher {
                 pSrc += 2;
                 copymask = COPY_MASK_INITIAL;
 
+                if (logger !== null)
+                    logger.debug('  map: 0x' + copymap.toString(16));
             } else {
 
                 if ((copymap & copymask) != 0) {
@@ -258,8 +268,16 @@ class Decipher {
 
                     let offset = ((s0 & OFFSET_MASK) << OFFSET_BITS) | s1;
                     if (offset === 0) {
-                        throw new Error('The offset is Zero.');
+                        error('The offset is Zero.');
                     }
+
+                    if (logger !== null)
+                        logger.debug('  mask: 0x' + copymask.toString(16) +
+                            ', length: 0x' + length.toString(16) +
+                            ', offset: 0x' + offset.toString(16) +
+                            ', I: 0x' + pSrc.toString(16) +
+                            ', O: 0x' + pDest.toString(16)
+                        );
 
                     this.copy(dest, pDest, dest, pDest - offset, length);
                     pDest += length;
@@ -274,7 +292,7 @@ class Decipher {
 
         //  Trailer
         if (src.readUInt16BE(pSrc) != 0) {
-            throw new Error('Missing block end.\n');
+            error('Missing block end.\n');
         }
 
         return pDest;
@@ -287,11 +305,15 @@ class Decipher {
 
         while (true) {
             if (pOut > out.length) {
-                throw new Error('Not enough output buffer.');
+                error('Not enough output buffer.');
             }
 
             let blockLength = this.getBlockLength(pIn, model);
             pIn += 2;
+
+            if (logger !== null)
+                logger.debug('block: 0x' + (pIn - 2).toString(16) +
+                    ', length: 0x' + blockLength.toString(16));
 
             if (blockLength == 0) {
                 //  EOF
@@ -299,20 +321,18 @@ class Decipher {
             } else if (model === CAMERA_K_S1 &&
                 blockLength === BLOCK_LENGTH_K_S1) {
                 //  for some reason the last 2 bytes ignored
-                this.copy(out, pOut,
-                    this._buffer, pIn, blockLength - 2);
+                this.copy(out, pOut, this._buffer, pIn, blockLength - 2);
                 pIn += blockLength;
                 pOut += blockLength - 2;
             } else if (model === CAMERA_K_S2 &&
                 blockLength === BLOCK_LENGTH_K_S2) {
-                this.copy(out, pOut,
-                    this._buffer, pIn, blockLength);
+                this.copy(out, pOut, this._buffer, pIn, blockLength);
                 pOut += blockLength;
                 pIn += blockLength;
             } else {
                 //  decompress the block
-                pOut = this.decompressBlock(out, pOut,
-                    this._buffer, pIn, blockLength
+                pOut = this.decompressBlock(out, pOut, this._buffer, pIn,
+                    blockLength
                 );
                 pIn += blockLength;
             }
@@ -331,6 +351,10 @@ class Decipher {
         if (this.strcmp(OFFSET_COPYRIGHT_024, COPYRIGHT)) {
             this._isLittleEndian = false;
 
+            if (logger !== null)
+                logger.debug('Found "' + COPYRIGHT + '" @ 0x' +
+                    OFFSET_COPYRIGHT_024.toString(16) + ', [Big-Endian]');
+
             this.deobfuscate(
                 OFFSET_BASE_0,
                 OFFSET_IV_0,
@@ -343,6 +367,10 @@ class Decipher {
                 SECTION_0x00080000 - OFFSET_START_100);
         } else if (this.strcmp(OFFSET_COPYRIGHT_F24, COPYRIGHT)) {
             this._isLittleEndian = false;
+
+            if (logger !== null)
+                logger.debug('Found "' + COPYRIGHT + '" @ 0x' +
+                    OFFSET_COPYRIGHT_F24.toString(16) + ', [Big-Endian]');
 
             this.deobfuscate(
                 OFFSET_BASE_0,
@@ -364,6 +392,11 @@ class Decipher {
             }
         } else if (this.strcmp(OFFSET_COPYRIGHT_124, COPYRIGHT)) {
             this._isLittleEndian = true;
+
+            if (logger !== null)
+                logger.debug('Found "' + COPYRIGHT + '" @ 0x' +
+                    OFFSET_COPYRIGHT_124.toString(16) + ', [Little-Endian]'
+                );
 
             this.deobfuscate(
                 OFFSET_BASE_0,
@@ -393,14 +426,19 @@ class Decipher {
         } else if (this.strcmp(OFFSET_PENTAX_KS, PENTAX_KS)) {
             let model = this._buffer.readUInt8(OFFSET_MODEL) -
                 '0'.charCodeAt(0);
-            console.log('Found firmware of ' + PENTAX_KS + model);
+            if (logger !== null)
+                logger.info('Found firmware of ' + PENTAX_KS + model);
             this.validateKS();
             return this.decompress(BLOCK_START, model);
         } else {
-            throw new Error('Unknown firmware format.');
+            error('Unknown firmware format.');
         }
 
         return this._buffer;
+    }
+
+    setLogger(target) {
+        logger = target;
     }
 }
 
