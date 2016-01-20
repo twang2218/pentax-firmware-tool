@@ -42,20 +42,28 @@ pfwtool -i <in> -o <out>
 
  * `<out>` is the output file name of the decrypted/decompressed firmware.
 
+To extract the resources file in K-S1/K-S2 firmware:
+
+```bash
+pfwtool -i ks1.bin -e resdir
+```
+
 For other arguments, please check the `--help` arguments
 
 ```bash
 $ pfwtool -h
 
-Usage: pfwtool [options]
+  Usage: pfwtool [options]
 
-A command line tool to decrypt/decompress Pentax firmware
+  A command line tool to decrypt/decompress Pentax firmware
 
-Options:
+  Options:
 
-  -h, --help               output usage information
-  -V, --version            output the version number
-  -i, --input <filename>   Encrypted firmware filename (e.g. "fwdc226b.bin"). If no input filename is specified, the standard input will be used.
-  -o, --output <filename>  Output decrypted filename. If no output file name is specified, the standard output will be used.
-  -d, --debug [logfile]    Enable debug, log to file if the log filename is given, otherwise it will log to the console.
+    -h, --help                     output usage information
+    -V, --version                  output the version number
+    -i, --input <filename>         Encrypted firmware filename (e.g. "fwdc226b.bin"). If no input filename is specified, the standard input will be used.
+    -o, --output <filename>        Output decrypted filename.
+    -d, --debug [logfile]          Enable debug, log to file if the log filename is given, otherwise it will log to the console.
+    -l, --list-resources           List resource files in the firmware.
+    -e, --extract-resources <dir>  Extract the resource to the given directory.
 ```
