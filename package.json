@@ -1,6 +1,6 @@
 {
   "name": "pfwtool",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Pentax Firmware Decode Tool",
   "main": "index.js",
   "bin": "pfwtool.js",

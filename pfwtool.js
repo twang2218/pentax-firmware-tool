@@ -102,6 +102,13 @@ function decode(data) {
 }
 
 function main() {
+  if (typeof program.output === 'undefined' &&
+    typeof program.listResources === 'undefined' &&
+    typeof program.extractResources === 'undefined') {
+    program.outputHelp();
+    process.exit(-1);
+  }
+
   //  load
   if (typeof program.input !== 'undefined') {
     //  read file
