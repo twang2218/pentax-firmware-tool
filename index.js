@@ -1,6 +1,8 @@
 'use strict';
 
-let logger = null;
+const path = require('path');
+const mkdirp = require('mkdirp');
+const fs = require('fs');
 
 //  Constants
 
@@ -60,6 +62,11 @@ const OFFSET_MASK = (0xFF << LENGTH_BITS) & 0xFF;
 const LENGTH_MASK = (~OFFSET_MASK) & 0xFF;
 const LENGTH_EXTENDED = 10;
 const BLOCK_START = 0x200;
+
+//      Resources
+const OFFSET_RESOURCE = 0x800200;
+
+let logger = null;
 
 class Decipher {
   constructor() {
@@ -344,11 +351,52 @@ class Decipher {
     return out.slice(0, pOut);
   }
 
+  //  Resources Extraction
+  //    Get Resource list
+  getResourceList() {
+    if (!this.strcmp(OFFSET_PENTAX_KS, PENTAX_KS) || this._buffer.length < OFFSET_RESOURCE + 4) {
+      throw new Error('Unknown file format for extracting resources.');
+    }
+
+    const res = [];
+    const resCount = this._buffer.readUInt32LE(OFFSET_RESOURCE);
+    for (let i = 0; i < resCount; ++i) {
+      const pos = OFFSET_RESOURCE + 32 * i + 16;
+      const resInfo = {
+        name: this._buffer.slice(pos, pos + 24).toString('utf8').replace(/\0/g, ''),
+        offset: this._buffer.readUInt32LE(pos + 24),
+        length: this._buffer.readUInt32LE(pos + 24 + 4),
+      };
+      res.push(resInfo);
+    }
+    return res;
+  }
+
+  //    Extrace the resources
+  extractResource(resInfo, resDir) {
+    const filename = path.join(resDir, resInfo.name.replace(/:/g, '').replace(/\\/g, path.sep));
+    if (logger !== null) {
+      logger.debug('old: "' + resInfo.name + '", new: "' + filename + '"');
+    }
+    const dir = path.dirname(filename);
+    mkdirp(dir, err => {
+      if (err) throw err;
+      const offsetStart = OFFSET_RESOURCE + resInfo.offset;
+      const offsetEnd = offsetStart + resInfo.length;
+      fs.writeFile(filename, this._buffer.slice(offsetStart, offsetEnd), error => {
+        if (error) throw error;
+      });
+    });
+  }
+
+  extractResources(res, resDir) {
+    res.map(r => {
+      this.extractResource(r, resDir);
+    });
+  }
+
   //  Entrance
-
-  decode(input) {
-    this._buffer = input;
-
+  decode() {
     const inSize = this._buffer.length;
 
     if (this.strcmp(OFFSET_COPYRIGHT_024, COPYRIGHT)) {
@@ -431,8 +479,7 @@ class Decipher {
         OFFSET_START_80,
         inSize - partSize - OFFSET_START_80);
     } else if (this.strcmp(OFFSET_PENTAX_KS, PENTAX_KS)) {
-      const model = this._buffer.readUInt8(OFFSET_MODEL) -
-        '0'.charCodeAt(0);
+      const model = this._buffer.readUInt8(OFFSET_MODEL) - '0'.charCodeAt(0);
 
       if (logger !== null) {
         logger.info('Found firmware of ' + PENTAX_KS + model);
@@ -445,6 +492,10 @@ class Decipher {
     }
 
     return this._buffer;
+  }
+
+  setInput(data) {
+    this._buffer = data;
   }
 
   setLogger(target) {
